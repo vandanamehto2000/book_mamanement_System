@@ -19,13 +19,19 @@ const bookSchema = new mongoose.Schema({
     },
     bookState: {
         type: String,
+        enum: ["Available", "Not Available"],
         required: true
     },
-    bookImage:{
-        type:String,
-        required:true
+    BSN_no: {
+        type: Number,
+        unique: true,
+        required: true
+    },
+    bookImage: {
+        type: String,
+        required: true
     }
-  
+
 }, { timestamps: true })
 
 const books = new mongoose.model("books", bookSchema)

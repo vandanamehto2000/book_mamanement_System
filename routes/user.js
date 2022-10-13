@@ -14,7 +14,7 @@ const storage = multer.diskStorage({
         cb(null, "image")
     }, filename: function (req, file, cb) {
         cb(null, Date.now() + file.originalname)
-        console.log(file.originalname, "ppppppppp")
+        // cb(null, file.originalname)
     }
 
 })
@@ -47,7 +47,6 @@ router.post("/register", async (req, res) => {
         let saltRound = 10;
         let password = req.body.password;
         let encryptedPassword = await bcrypt.hash(password, saltRound);
-        console.log(encryptedPassword, "uuuuuuuuuu");
         user = new User({
             name: req.body.name,
             email: req.body.email,
@@ -68,7 +67,7 @@ router.post("/login", async (req, res) => {
     if (!user) {
         return res.json({ msg: "email is incorrect" })
     }
-    let secretkey = "hjd748738hfj876484yuf"
+    let secretkey = process.env.SECRETKEY;
     let comparePassword = await bcrypt.compare(req.body.password, user.password)
     if (comparePassword) {
         let token = jwt.sign({ email: req.body.email }, secretkey)
@@ -83,7 +82,7 @@ router.post("/login", async (req, res) => {
 
 // user verify
 router.get("/userVerify", (req, res) => {
-    let secretkey = "hjd748738hfj876484yuf";
+    let secretkey = process.env.SECRETKEY;
     if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer") || !req.headers.authorization.split(" ")[1]) {
         return res.json({ msg: "please provide the token" })
     }
@@ -93,10 +92,18 @@ router.get("/userVerify", (req, res) => {
 })
 
 
-// password change of any user or admin
-router.put("/admin/changePassword/:id", async (req, res) => {
+
+
+router.put("/admin/changePassword", async (req, res) => {
     const { password, password_confirmation } = req.body;
-    let id = req.params.id;
+    let secretkey = process.env.SECRETKEY;
+    if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer") || !req.headers.authorization.split(" ")[1]) {
+        return res.json({ msg: "please provide the token" })
+    }
+    let token = req.headers.authorization.split(" ")[1]
+    let decode = jwt.verify(token, secretkey)
+    let decodeEmail = decode.email
+
     if (password && password_confirmation) {
         if (password !== password_confirmation) {
             res.json({ msg: "password and password_confirmation does not match" })
@@ -104,7 +111,7 @@ router.put("/admin/changePassword/:id", async (req, res) => {
         else {
             let saltRound = 10;
             let newHashedPassword = await bcrypt.hash(password, saltRound)
-            await User.findByIdAndUpdate(id, { $set: { password: newHashedPassword } })
+            await User.updateMany({ email: decodeEmail }, { $set: { password: newHashedPassword } })
             res.json({ status: "success", message: "change password successfully" })
         }
 
@@ -114,47 +121,77 @@ router.put("/admin/changePassword/:id", async (req, res) => {
 })
 
 
+
 // update admin details by admin
-router.put("/admin/update/:email", checkUserAuth("admin"), async (req, res) => {
-    console.log(User, "111111111111111")
+// router.put("/admin/update/:email", checkUserAuth("admin"), async (req, res) => {
+//     try {
+//         let email = req.params.email
+//         const data = await User.find({ email })
+//         if (data) {
+//             await User.updateMany(
+//                 { email: req.params.email },
+//                 {
+//                     $set: {
+//                         name: req.body.name
+//                     }
+//                 },
+//                 { new: true })
+//         }
+//         console.log(data, "rrrrrrrrrr")
+//         res.send("name updated")
+//     }
+//     catch (err) {
+//         console.log(err, "qqqqqqqqqqq")
+//         res.send(err)
+//     }
+// })
+
+router.put("/admin/update", checkUserAuth("admin"), async (req, res) => {
     try {
-        let email = req.params.email
-        const data = await User.find({ email })
-        if (data) {
-            await User.updateMany(
-                { email: req.params.email },
-                {
-                    $set: {
-                        name: req.body.name
-                    }
-                },
-                { new: true })
-        }
-        console.log(data, "rrrrrrrrrr")
-        res.send("name updated")
+        let secretkey = process.env.SECRETKEY;
+        let token = req.headers.authorization.split(" ")[1]
+        let decode = jwt.verify(token, secretkey)
+        let decodeEmail = decode.email
+        console.log(decodeEmail)
+        let data = await User.updateMany({ email: decodeEmail }, req.body, { new: true })
+        res.json({ msg: "data has updated successfully", data })
+
     }
     catch (err) {
-        console.log(err, "qqqqqqqqqqq")
-        res.send(err)
+        res.send(err);
     }
 })
 
 
-// delete admin account
-router.delete("/admin/delete/:email", checkUserAuth("admin"), async (req, res) => {
-    console.log(User, "tttttttttttt")
-    try {
-        let email = req.params.email
-        const data = await User.find({ email })
-        if (data) {
-            await User.deleteMany({ email })
-        }
-        console.log("data has deleted......")
-        res.send("data has deleted.....")
 
+// delete admin account
+// router.delete("/admin/delete/:email", checkUserAuth("admin"), async (req, res) => {
+//     try {
+//         let email = req.params.email
+//         const data = await User.find({ email })
+//         if (data) {
+//             await User.deleteMany({ email })
+//         }
+//         res.send("data has deleted.....")
+
+//     }
+//     catch (err) {
+//         res.send(err)
+//     }
+// })
+
+router.delete("/admin/delete", checkUserAuth("admin"), async (req, res) => {
+    try {
+        let secretkey = process.env.SECRETKEY;
+        let token = req.headers.authorization.split(" ")[1]
+        let decode = jwt.verify(token, secretkey)
+        let decodeEmail = decode.email
+        console.log(decodeEmail)
+        let data = await User.deleteMany({ email: decodeEmail })
+        res.send("data has deleted successfully")
     }
     catch (err) {
-        console.log(err)
+        console.log(err);
         res.send(err)
     }
 })
@@ -168,7 +205,6 @@ router.get("/admin/readBook", checkUserAuth("admin"), async (req, res) => {
 
     }
     catch (err) {
-        console.log(err)
         res.send(err)
     }
 })
@@ -186,24 +222,23 @@ router.get("/admin/readBook/:id", checkUserAuth("admin"), async (req, res) => {
 
 
 // post book by admin
-router.post("/books", upload.single("file") ,checkUserAuth("admin"), async (req, res) => {
-    console.log(req.file, req.body, "uuuuuuuuu")
-    
-    try {
-        let book = new Book({
-            bookName: req.body.bookName,
-            bookAuthor: req.body.bookAuthor,
-            bookPage: req.body.bookPage,
-            bookPrice: req.body.bookPrice,
-            bookState: req.body.bookState,
-            bookImage:req.file.filename
-        })
-        let data = await book.save()
-        res.send(data)
+router.post("/books", upload.single("file"), checkUserAuth("admin"), async (req, res) => {
+    let book = await Book.findOne({ BSN_no: req.body.BSN_no })
+    if (book) {
+        return res.json({ msg: "This BSN_no is already exists" })
     }
-    catch (err) {
-        res.send(err)
-    }
+    book = new Book({
+        bookName: req.body.bookName,
+        bookAuthor: req.body.bookAuthor,
+        bookPage: req.body.bookPage,
+        bookPrice: req.body.bookPrice,
+        bookState: req.body.bookState,
+        BSN_no: req.body.BSN_no,
+        bookImage: req.file.filename
+
+    })
+    let data = await book.save()
+    res.json({ msg: "book has posted successfully", data })
 })
 
 
